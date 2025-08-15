@@ -355,8 +355,8 @@
             activity: {
                 id: 'default',
                 title: "幸运抽奖活动",
-                startTime: new Date().toISOString(),
-                endTime: new Date(Date.now() + 86400000).toISOString(), // 24小时后结束
+                star_tTime: new Date().toISOString(),
+                end_Time: new Date(Date.now() + 86400000).toISOString(), // 24小时后结束
                 winnerCount: 3,
                 status: "pending", // pending: 未开始, active: 进行中, ended: 已结束
                 password: "" // 管理员密码哈希
@@ -492,8 +492,8 @@
                 } else {
                     globalData.activity = {
                         ...data,
-                        startTime: data.start_time,
-                        endTime: data.end_time,
+                        start_Time: data.start_time,
+                        end_Time: data.end_time,
                         winnerCount: data.winner_count
                     };
                 }
@@ -560,8 +560,8 @@
                             if (payload.new) {
                                 globalData.activity = {
                                     ...payload.new,
-                                    startTime: payload.new.start_time,
-                                    endTime: payload.new.end_time,
+                                    start_Time: payload.new.start_time,
+                                    end_Time: payload.new.end_time,
                                     winnerCount: payload.new.winner_count
                                 };
                                 updateActivityDisplay();
@@ -608,11 +608,11 @@
 
         // 更新活动显示
         function updateActivityDisplay() {
-            const { title, startTime, endTime, winnerCount, status } = globalData.activity;
+            const { title, start_Time, end_Time, winnerCount, status } = globalData.activity;
             
             // 格式化时间
-            const start = new Date(startTime);
-            const end = new Date(endTime);
+            const start = new Date(start_Time);
+            const end = new Date(end_Time);
             const formattedStart = start.toLocaleString();
             const formattedEnd = end.toLocaleString();
             
@@ -763,7 +763,7 @@
         }
 
         // 启动倒计时
-        function startCountdown(endTime) {
+        function startCountdown(end_Time) {
             // 清除之前的定时器
             if (window.countdownTimer) {
                 clearInterval(window.countdownTimer);
@@ -771,7 +771,7 @@
             
             function updateCountdown() {
                 const now = new Date().getTime();
-                const distance = endTime - now;
+                const distance = end_Time - now;
                 
                 if (distance <= 0) {
                     // 时间到，自动结束活动
@@ -923,8 +923,8 @@
                 
                 const title = document.getElementById("activity-title-input").value.trim();
                 const winnerCount = parseInt(document.getElementById("winner-count").value);
-                const startTime = document.getElementById("start-time").value;
-                const endTime = document.getElementById("end-time").value;
+                const start_Time = document.getElementById("start-time").value;
+                const end_Time = document.getElementById("end-time").value;
                 const newPassword = document.getElementById("admin-password-set").value;
                 
                 if (!title) {
@@ -937,12 +937,12 @@
                     return;
                 }
                 
-                if (!startTime || !endTime) {
+                if (!start_Time || !end_Time) {
                     alert("请选择活动时间");
                     return;
                 }
                 
-                if (new Date(startTime) >= new Date(endTime)) {
+                if (new Date(start_Time) >= new Date(end_Time)) {
                     alert("结束时间必须晚于开始时间");
                     return;
                 }
@@ -951,8 +951,8 @@
                     // 准备更新数据
                     const updates = {
                         title,
-                        start_time: startTime,
-                        end_time: endTime,
+                        start_time: start_Time,
+                        end_time: end_Time,
                         winner_count: winnerCount
                     };
                     
@@ -987,9 +987,9 @@
                 }
                 
                 const now = new Date();
-                const startTime = new Date(globalData.activity.startTime);
+                const start_Time = new Date(globalData.activity.start_Time);
                 
-                if (now < startTime) {
+                if (now < start_Time) {
                     if (!confirm("活动开始时间尚未到达，确定要提前开启吗？")) {
                         return;
                     }
@@ -1189,4 +1189,5 @@
     </script>
 </body>
 </html>
+
     
