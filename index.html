@@ -41,15 +41,29 @@
             .pulse-animation {
                 animation: pulse 2s infinite;
             }
+            .marquee {
+                animation: marquee 30s linear infinite;
+            }
             @keyframes pulse {
                 0% { transform: scale(1); }
                 50% { transform: scale(1.05); }
                 100% { transform: scale(1); }
             }
+            @keyframes marquee {
+                0% { transform: translateX(100%); }
+                100% { transform: translateX(-100%); }
+            }
         }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen font-sans">
+    <!-- 滚动弹幕 -->
+    <div class="bg-primary/90 text-white py-2 overflow-hidden whitespace-nowrap">
+        <div id="marquee-content" class="marquee inline-block">
+            欢迎参与小羊抽奖活动！祝大家好运连连，大奖不断！
+        </div>
+    </div>
+
     <!-- 加载中 -->
     <div id="loader" class="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center">
         <div class="w-12 h-12 border-4 border-gray-200 border-t-primary rounded-full animate-spin mb-4"></div>
@@ -98,6 +112,7 @@
             <div id="activity-info" class="space-y-3 text-gray-600">
                 <p><span class="font-medium text-gray-700">活动名称：</span><span id="activity-title">加载中...</span></p>
                 <p><span class="font-medium text-gray-700">活动时间：</span><span id="activity-time">加载中...</span></p>
+                <p><span class="font-medium text-gray-700">活动时长：</span><span id="activity-duration">加载中...</span></p>
                 <p><span class="font-medium text-gray-700">中奖人数：</span><span id="activity-winners">加载中...</span></p>
                 <p><span class="font-medium text-gray-700">当前参与：</span><span id="participant-count">0</span>人</p>
             </div>
@@ -223,6 +238,23 @@
         </header>
 
         <main class="container mx-auto px-4 py-6">
+            <!-- 弹幕设置 -->
+            <div class="bg-white rounded-xl shadow-md p-6 mb-8 border border-gray-100">
+                <h3 class="text-lg font-bold text-gray-800 mb-4">滚动弹幕设置</h3>
+                <form id="marquee-form" class="space-y-4">
+                    <div>
+                        <label for="marquee-text" class="block text-sm font-medium text-gray-700 mb-1">弹幕内容</label>
+                        <input type="text" id="marquee-text" placeholder="输入滚动弹幕内容" 
+                               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
+                               required>
+                    </div>
+                    <button type="submit" 
+                            class="py-2 px-4 bg-primary text-white rounded-lg font-medium hover:bg-primary/90 transition-all active:btn-press">
+                        保存弹幕设置
+                    </button>
+                </form>
+            </div>
+
             <!-- 活动设置 -->
             <div class="bg-white rounded-xl shadow-md p-6 mb-8 border border-gray-100">
                 <h3 class="text-lg font-bold text-gray-800 mb-4">活动设置</h3>
@@ -247,10 +279,25 @@
                                    required>
                         </div>
                         <div>
-                            <label for="end-time" class="block text-sm font-medium text-gray-700 mb-1">结束时间</label>
-                            <input type="datetime-local" id="end-time" 
-                                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
-                                   required>
+                            <label for="duration-select" class="block text-sm font-medium text-gray-700 mb-1">活动时长</label>
+                            <select id="duration-select" 
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors"
+                                    required>
+                                <option value="30">30分钟</option>
+                                <option value="60" selected>1小时</option>
+                                <option value="120">2小时</option>
+                                <option value="240">4小时</option>
+                                <option value="720">12小时</option>
+                                <option value="1440">1天</option>
+                                <option value="2880">2天</option>
+                                <option value="10080">1周</option>
+                                <option value="custom">自定义分钟</option>
+                            </select>
+                        </div>
+                        <div id="custom-duration-container" class="hidden md:col-span-2">
+                            <label for="custom-duration" class="block text-sm font-medium text-gray-700 mb-1">自定义时长（分钟）</label>
+                            <input type="number" id="custom-duration" min="1" value="60" 
+                                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-colors">
                         </div>
                     </div>
                     <div>
@@ -354,11 +401,13 @@
                 id: 'default',
                 title: "小羊抽奖活动",
                 startTime: new Date().toISOString(),
-                endTime: new Date(Date.now() + 86400000).toISOString(), // 24小时后结束
+                endTime: new Date(Date.now() + 3600000).toISOString(), // 默认1小时后结束
+                duration: 60, // 活动时长(分钟)
                 winnerCount: 3,
                 status: "pending", // pending: 未开始, active: 进行中, ended: 已结束
                 password: "" // 管理员密码哈希
             },
+            marqueeText: "欢迎参与小羊抽奖活动！祝大家好运连连，大奖不断！", // 弹幕内容
             historyActivity: null, // 上一期活动
             historyWinners: [], // 上一期活动中奖名单
             participants: [],
@@ -370,7 +419,7 @@
             isAutoDrawing: false // 标记是否正在自动抽奖中
         };
 
-        // 生成UUID函数 - 解决UUID错误
+        // 生成UUID函数
         function generateUUID() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
                 const r = Math.random() * 16 | 0;
@@ -412,9 +461,16 @@
                     }
                 }
                 
+                // 创建marquee表（如果不存在）
+                await createMarqueeTable();
+                
                 updateLoaderText("正在获取用户信息...");
                 // 获取用户IP（用于防重复参与）
                 await getUserIp();
+                
+                updateLoaderText("正在加载弹幕内容...");
+                // 加载弹幕内容
+                await loadMarqueeText();
                 
                 updateLoaderText("正在加载活动数据...");
                 // 加载当前活动数据
@@ -456,6 +512,93 @@
             } catch (error) {
                 console.error("初始化错误:", error);
                 showError(error.message || "初始化失败，请检查网络连接和配置");
+            }
+        }
+
+        // 创建marquee表（存储弹幕内容）
+        async function createMarqueeTable() {
+            const { error } = await supabase.rpc('create_marquee_table_if_not_exists');
+            
+            // 如果函数不存在，直接创建表
+            if (error && error.code === 'PGRST116') {
+                const createTableQuery = `
+                CREATE TABLE IF NOT EXISTS marquee (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    content TEXT NOT NULL,
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+                
+                -- 插入默认数据（如果表为空）
+                INSERT INTO marquee (content)
+                SELECT '欢迎参与小羊抽奖活动！祝大家好运连连，大奖不断！'
+                WHERE NOT EXISTS (SELECT 1 FROM marquee);
+                `;
+                
+                const { error: createError } = await supabase.rpc('exec_sql', { sql: createTableQuery });
+                if (createError) console.warn("创建marquee表失败，使用默认弹幕:", createError);
+            }
+        }
+
+        // 加载弹幕内容
+        async function loadMarqueeText() {
+            try {
+                const { data, error } = await supabase
+                    .from('marquee')
+                    .select('content')
+                    .order('updated_at', { ascending: false })
+                    .limit(1)
+                    .single();
+                    
+                if (error) {
+                    console.warn("加载弹幕失败，使用默认内容:", error);
+                    return;
+                }
+                
+                if (data?.content) {
+                    globalData.marqueeText = data.content;
+                    document.getElementById("marquee-content").textContent = data.content;
+                    document.getElementById("marquee-text").value = data.content;
+                }
+            } catch (error) {
+                console.error("加载弹幕内容错误:", error);
+            }
+        }
+
+        // 保存弹幕内容
+        async function saveMarqueeText(text) {
+            try {
+                // 先检查是否有现有记录
+                const { data: existingData } = await supabase
+                    .from('marquee')
+                    .select('id')
+                    .order('updated_at', { ascending: false })
+                    .limit(1)
+                    .single();
+                    
+                let error;
+                
+                if (existingData?.id) {
+                    // 更新现有记录
+                    ({ error } = await supabase
+                        .from('marquee')
+                        .update({ content: text, updated_at: new Date().toISOString() })
+                        .eq('id', existingData.id));
+                } else {
+                    // 创建新记录
+                    ({ error } = await supabase
+                        .from('marquee')
+                        .insert([{ content: text }]));
+                }
+                
+                if (error) throw error;
+                
+                // 更新本地数据和UI
+                globalData.marqueeText = text;
+                document.getElementById("marquee-content").textContent = text;
+                return true;
+            } catch (error) {
+                console.error("保存弹幕内容错误:", error);
+                return false;
             }
         }
 
@@ -508,17 +651,21 @@
                     if (error.code === 'PGRST116') {
                         // 没有当前活动，创建一个新的
                         const newId = generateUUID();
+                        const now = new Date();
+                        const endTime = new Date(now.getTime() + 3600000); // 1小时后结束
+                        
                         const { error: insertError } = await supabase
                             .from('activity')
                             .insert([{
                                 id: newId,
                                 title: "小羊抽奖活动",
-                                start_time: new Date().toISOString(),
-                                end_time: new Date(Date.now() + 86400000).toISOString(),
+                                start_time: now.toISOString(),
+                                end_time: endTime.toISOString(),
                                 winner_count: 3,
                                 status: "pending",
                                 password: "",
-                                is_current: true
+                                is_current: true,
+                                duration: 60 // 添加时长字段
                             }]);
                             
                         if (insertError) throw insertError;
@@ -529,23 +676,52 @@
                         throw error;
                     }
                 } else {
+                    // 计算活动时长（分钟）
+                    const duration = Math.round(
+                        (new Date(data.end_time).getTime() - new Date(data.start_time).getTime()) / (1000 * 60)
+                    );
+                    
                     // 映射蛇形命名字段到驼峰变量
                     globalData.activity = {
                         id: data.id,
                         title: data.title,
                         startTime: data.start_time,
                         endTime: data.end_time,
+                        duration: data.duration || duration, // 使用存储的时长或计算值
                         winnerCount: data.winner_count,
                         status: data.status,
                         password: data.password,
                         isCurrent: data.is_current
                     };
+                    
+                    // 更新活动设置表单中的时长选择
+                    updateDurationSelection();
                 }
                 
                 updateActivityDisplay();
             } catch (error) {
                 console.error("加载活动数据错误:", error);
                 throw new Error(`加载活动信息失败: ${error.message}`);
+            }
+        }
+
+        // 更新时长选择控件
+        function updateDurationSelection() {
+            const duration = globalData.activity.duration;
+            const selectEl = document.getElementById("duration-select");
+            const customContainer = document.getElementById("custom-duration-container");
+            const customInput = document.getElementById("custom-duration");
+            
+            // 常用时长选项
+            const commonDurations = ["30", "60", "120", "240", "720", "1440", "2880", "10080"];
+            
+            if (commonDurations.includes(duration.toString())) {
+                selectEl.value = duration;
+                customContainer.classList.add("hidden");
+            } else {
+                selectEl.value = "custom";
+                customContainer.classList.remove("hidden");
+                customInput.value = duration;
             }
         }
 
@@ -674,16 +850,23 @@
                         async (payload) => {
                             if (payload.new && payload.new.is_current) {
                                 // 更新当前活动
+                                const duration = Math.round(
+                                    (new Date(payload.new.end_time).getTime() - new Date(payload.new.start_time).getTime()) / (1000 * 60)
+                                );
+                                
                                 globalData.activity = {
                                     id: payload.new.id,
                                     title: payload.new.title,
                                     startTime: payload.new.start_time,
                                     endTime: payload.new.end_time,
+                                    duration: payload.new.duration || duration,
                                     winnerCount: payload.new.winner_count,
                                     status: payload.new.status,
                                     password: payload.new.password,
                                     isCurrent: payload.new.is_current
                                 };
+                                
+                                updateDurationSelection();
                                 updateActivityDisplay();
                                 
                                 // 如果当前活动已结束，加载历史活动
@@ -730,6 +913,20 @@
                     .subscribe();
                 
                 globalData.subscriptions.push(winnersChannel);
+                
+                // 订阅弹幕数据变化
+                const marqueeChannel = supabase
+                    .channel('marquee-channel')
+                    .on(
+                        'postgres_changes',
+                        { event: '*', schema: 'public', table: 'marquee' },
+                        () => {
+                            loadMarqueeText();
+                        }
+                    )
+                    .subscribe();
+                
+                globalData.subscriptions.push(marqueeChannel);
             } catch (error) {
                 console.error("设置实时订阅错误:", error);
                 alert("实时通知功能可能无法使用，数据可能不会自动更新");
@@ -738,17 +935,28 @@
 
         // 更新活动显示
         function updateActivityDisplay() {
-            const { title, startTime, endTime, winnerCount, status } = globalData.activity;
+            const { title, startTime, endTime, duration, winnerCount, status } = globalData.activity;
             
-            // 格式化时间 - 使用相同的时区和格式处理
+            // 格式化时间
             const start = new Date(startTime);
             const end = new Date(endTime);
             const formattedStart = start.toLocaleString();
             const formattedEnd = end.toLocaleString();
             
+            // 格式化时长显示
+            let durationText = '';
+            if (duration < 60) {
+                durationText = `${duration}分钟`;
+            } else if (duration < 1440) {
+                durationText = `${Math.floor(duration / 60)}小时${duration % 60 > 0 ? `${duration % 60}分钟` : ''}`;
+            } else {
+                durationText = `${Math.floor(duration / 1440)}天${duration % 1440 > 0 ? `${Math.floor((duration % 1440) / 60)}小时` : ''}`;
+            }
+            
             // 更新活动信息
             document.getElementById("activity-title").textContent = title;
             document.getElementById("activity-time").textContent = `${formattedStart} - ${formattedEnd}`;
+            document.getElementById("activity-duration").textContent = durationText;
             document.getElementById("activity-winners").textContent = `${winnerCount}人`;
             document.getElementById("participant-count").textContent = globalData.participants.length;
             document.getElementById("admin-participant-count").textContent = globalData.participants.length;
@@ -805,11 +1013,12 @@
                 ended提示.classList.remove("hidden");
             }
             
-            // 更新管理员表单中的时间，确保与显示一致
+            // 更新管理员表单中的时间和时长
             document.getElementById("activity-title-input").value = title;
             document.getElementById("winner-count").value = winnerCount;
             document.getElementById("start-time").value = formatDateTimeForInput(start);
-            document.getElementById("end-time").value = formatDateTimeForInput(end);
+            
+            // 不需要手动设置结束时间，由开始时间和时长自动计算
             
             // 显示历史活动区域（如果有历史活动）
             const historyEl = document.getElementById("history-activity");
@@ -1073,8 +1282,12 @@
                 // 2. 创建新活动
                 const newId = generateUUID();
                 const now = new Date();
-                const tomorrow = new Date(now);
-                tomorrow.setDate(tomorrow.getDate() + 1);
+                const duration = parseInt(document.getElementById("duration-select").value === "custom" 
+                    ? document.getElementById("custom-duration").value 
+                    : document.getElementById("duration-select").value) || 60;
+                
+                const endTime = new Date(now);
+                endTime.setMinutes(now.getMinutes() + duration);
                 
                 const { error: insertError } = await supabase
                     .from('activity')
@@ -1082,11 +1295,12 @@
                         id: newId,
                         title: "新的小羊抽奖活动",
                         start_time: now.toISOString(),
-                        end_time: tomorrow.toISOString(),
+                        end_time: endTime.toISOString(),
                         winner_count: 3,
                         status: "pending",
                         password: globalData.activity.password, // 沿用之前的密码
-                        is_current: true
+                        is_current: true,
+                        duration: duration // 存储活动时长
                     }]);
                     
                 if (insertError) {
@@ -1228,6 +1442,34 @@
                 document.getElementById("admin-panel").classList.add("hidden");
             });
             
+            // 弹幕设置提交
+            document.getElementById("marquee-form").addEventListener("submit", async (e) => {
+                e.preventDefault();
+                
+                const text = document.getElementById("marquee-text").value.trim();
+                if (!text) {
+                    alert("请输入弹幕内容");
+                    return;
+                }
+                
+                const success = await saveMarqueeText(text);
+                if (success) {
+                    alert("弹幕设置已保存");
+                } else {
+                    alert("保存失败，请重试");
+                }
+            });
+            
+            // 时长选择变化事件
+            document.getElementById("duration-select").addEventListener("change", (e) => {
+                const customContainer = document.getElementById("custom-duration-container");
+                if (e.target.value === "custom") {
+                    customContainer.classList.remove("hidden");
+                } else {
+                    customContainer.classList.add("hidden");
+                }
+            });
+            
             // 活动设置表单提交
             document.getElementById("activity-form").addEventListener("submit", async (e) => {
                 e.preventDefault();
@@ -1235,8 +1477,16 @@
                 const title = document.getElementById("activity-title-input").value.trim();
                 const winnerCount = parseInt(document.getElementById("winner-count").value);
                 const startTime = document.getElementById("start-time").value;
-                const endTime = document.getElementById("end-time").value;
+                const durationSelect = document.getElementById("duration-select");
+                const customDuration = document.getElementById("custom-duration").value;
                 const newPassword = document.getElementById("admin-password-set").value;
+                
+                // 计算实际时长
+                let duration = parseInt(durationSelect.value === "custom" ? customDuration : durationSelect.value);
+                if (isNaN(duration) || duration < 1) {
+                    alert("请输入有效的活动时长");
+                    return;
+                }
                 
                 if (!title) {
                     alert("请输入活动名称");
@@ -1248,23 +1498,24 @@
                     return;
                 }
                 
-                if (!startTime || !endTime) {
-                    alert("请选择活动时间");
+                if (!startTime) {
+                    alert("请选择活动开始时间");
                     return;
                 }
                 
-                if (new Date(startTime) >= new Date(endTime)) {
-                    alert("结束时间必须晚于开始时间");
-                    return;
-                }
+                // 计算结束时间
+                const startDate = new Date(startTime);
+                const endDate = new Date(startDate);
+                endDate.setMinutes(startDate.getMinutes() + duration);
                 
                 try {
                     // 准备更新数据
                     const updates = {
                         title,
                         start_time: startTime,
-                        end_time: endTime,
-                        winner_count: winnerCount
+                        end_time: endDate.toISOString(),
+                        winner_count: winnerCount,
+                        duration: duration // 保存时长
                     };
                     
                     // 如果输入了新密码，则更新
@@ -1285,9 +1536,7 @@
                     await loadActivityData();
                     
                     // 询问是否发布活动
-                    const now = new Date();
-                    const start = new Date(startTime);
-                    const shouldPublish = confirm(`活动设置已保存。是否立即发布活动？\n当前设置的开始时间为: ${start.toLocaleString()}`);
+                    const shouldPublish = confirm(`活动设置已保存。是否立即发布活动？\n当前设置的开始时间为: ${startDate.toLocaleString()}`);
                     
                     if (shouldPublish) {
                         // 更新状态为进行中
@@ -1366,7 +1615,7 @@
 
         // 格式化日期为input所需格式
         function formatDateTimeForInput(date) {
-            // 确保时间格式正确，解决时间显示不一致问题
+            // 确保时间格式正确
             return new Date(date).toISOString().slice(0, 16);
         }
 
