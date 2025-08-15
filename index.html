@@ -274,16 +274,15 @@
                             class="py-2.5 px-6 bg-danger text-white rounded-lg font-medium hover:bg-danger/90 transition-all active:btn-press">
                         <i class="fa fa-stop mr-1"></i>结束活动
                     </button>
+                    <button id="new-activity" 
+                            class="py-2.5 px-6 bg-accent text-white rounded-lg font-medium hover:bg-accent/90 transition-all active:btn-press">
+                        <i class="fa fa-refresh mr-1"></i>新建活动
+                    </button>
                     <button id="copy-link" 
                             class="py-2.5 px-6 bg-gray-100 text-gray-800 rounded-lg font-medium hover:bg-gray-200 transition-all active:btn-press">
                         <i class="fa fa-link mr-1"></i>复制参与链接
                     </button>
-                    <button id="clear-data" 
-                            class="py-2.5 px-6 bg-gray-800 text-white rounded-lg font-medium hover:bg-gray-700 transition-all active:btn-press">
-                        <i class="fa fa-trash mr-1"></i>清空数据
-                    </button>
                 </div>
-                <!-- 移除手动抽奖按钮 -->
             </div>
 
             <!-- 参与者列表 -->
@@ -354,7 +353,7 @@
         let globalData = {
             activity: {
                 id: 'default',
-                title: "幸运抽奖活动",
+                title: "小羊抽奖活动",
                 startTime: new Date().toISOString(),
                 endTime: new Date(Date.now() + 86400000).toISOString(), // 24小时后结束
                 winnerCount: 3,
@@ -645,7 +644,7 @@
         function updateActivityDisplay() {
             const { title, startTime, endTime, winnerCount, status } = globalData.activity;
             
-            // 格式化时间
+            // 格式化时间 - 使用相同的时区和格式处理
             const start = new Date(startTime);
             const end = new Date(endTime);
             const formattedStart = start.toLocaleString();
@@ -710,7 +709,7 @@
                 ended提示.classList.remove("hidden");
             }
             
-            // 更新管理员表单
+            // 更新管理员表单中的时间，确保与显示一致
             document.getElementById("activity-title-input").value = title;
             document.getElementById("winner-count").value = winnerCount;
             document.getElementById("start-time").value = formatDateTimeForInput(start);
@@ -778,7 +777,7 @@
                 </div>
             `).join("");
             
-            // 公共页面显示
+            // 公共页面显示 - 确保显示的是当前活动的中奖名单
             publicListEl.innerHTML = globalData.winners.map((winner) => `
                 <div class="border border-gray-100 rounded-lg p-4">
                     <div class="flex justify-between items-center mb-2">
@@ -915,6 +914,63 @@
                 } finally {
                     globalData.isAutoDrawing = false;
                 }
+            }
+        }
+
+        // 新建活动 - 清除参与者，保留中奖名单
+        async function createNewActivity() {
+            if (!confirm("确定要新建活动吗？这将清除当前参与者列表，但保留历史中奖名单。")) {
+                return;
+            }
+            
+            try {
+                // 1. 清除当前参与者
+                const { error: participantsError } = await supabase
+                    .from('participants')
+                    .delete()
+                    .neq('id', ''); // 删除所有参与者
+                    
+                if (participantsError) {
+                    throw new Error(participantsError.message);
+                }
+                
+                // 2. 清除当前中奖名单
+                const { error: winnersError } = await supabase
+                    .from('winners')
+                    .delete()
+                    .neq('id', ''); // 删除所有中奖者
+                    
+                if (winnersError) {
+                    throw new Error(winnersError.message);
+                }
+                
+                // 3. 设置新活动默认时间（当前时间开始，24小时后结束）
+                const now = new Date();
+                const tomorrow = new Date(now);
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                
+                // 4. 更新活动状态为未开始
+                const { error: activityError } = await supabase
+                    .from('activity')
+                    .update({ 
+                        status: "pending",
+                        start_time: now.toISOString(),
+                        end_time: tomorrow.toISOString()
+                    })
+                    .eq('id', 'default');
+                    
+                if (activityError) {
+                    throw new Error(activityError.message);
+                }
+                
+                // 5. 重新加载所有数据
+                await loadActivityData();
+                await loadParticipants();
+                await loadWinners();
+                
+                alert("新活动已创建，参与者列表已清空");
+            } catch (error) {
+                alert("新建活动失败: " + error.message);
             }
         }
 
@@ -1085,6 +1141,9 @@
                         throw new Error(error.message);
                     }
                     
+                    // 强制刷新活动数据以确保时间同步
+                    await loadActivityData();
+                    
                     alert("活动设置已保存");
                     if (newPassword) {
                         document.getElementById("admin-password-set").value = "";
@@ -1129,6 +1188,9 @@
                 alert("活动已结束，系统将自动进行抽奖");
             });
             
+            // 新建活动按钮
+            document.getElementById("new-activity").addEventListener("click", createNewActivity);
+            
             // 复制参与链接
             document.getElementById("copy-link").addEventListener("click", () => {
                 const link = window.location.href;
@@ -1139,43 +1201,13 @@
                     });
             });
             
-            // 清空数据
-            document.getElementById("clear-data").addEventListener("click", async () => {
-                if (!confirm("确定要清空所有参与者和中奖者数据吗？此操作不可恢复！")) {
-                    return;
-                }
-                
-                try {
-                    // 先删除中奖者
-                    const { error: winnersError } = await supabase
-                        .from('winners')
-                        .delete()
-                        .neq('id', '');
-                        
-                    if (winnersError) {
-                        throw new Error(winnersError.message);
-                    }
-                    
-                    // 再删除参与者
-                    const { error: participantsError } = await supabase
-                        .from('participants')
-                        .delete()
-                        .neq('id', '');
-                        
-                    if (participantsError) {
-                        throw new Error(participantsError.message);
-                    }
-                    
-                    alert("数据已清空");
-                } catch (error) {
-                    alert("清空失败: " + error.message);
-                }
-            });
-            
             // 查看中奖名单
             document.getElementById("show-winners-btn").addEventListener("click", () => {
-                document.getElementById("winners-modal").classList.remove("hidden");
-                document.getElementById("winners-modal").classList.add("flex");
+                // 显示前强制刷新中奖名单，确保是最新数据
+                loadWinners().then(() => {
+                    document.getElementById("winners-modal").classList.remove("hidden");
+                    document.getElementById("winners-modal").classList.add("flex");
+                });
             });
             
             // 关闭中奖名单模态框
@@ -1204,7 +1236,8 @@
 
         // 格式化日期为input所需格式
         function formatDateTimeForInput(date) {
-            return date.toISOString().slice(0, 16);
+            // 确保时间格式正确，解决时间显示不一致问题
+            return new Date(date).toISOString().slice(0, 16);
         }
 
         // 页面加载完成后初始化
