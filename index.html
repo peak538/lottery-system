@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>幸运抽奖系统</title>
+    <title>小羊抽奖系统</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -81,7 +81,7 @@
     <div id="app" class="container mx-auto px-4 py-8 max-w-3xl hidden">
         <!-- 头部 -->
         <header class="text-center mb-8">
-            <h1 class="text-[clamp(1.8rem,5vw,2.5rem)] font-bold text-gray-800 mb-2">幸运抽奖活动</h1>
+            <h1 class="text-[clamp(1.8rem,5vw,2.5rem)] font-bold text-gray-800 mb-2">小羊抽奖活动</h1>
             <p id="activity-status" class="inline-block px-4 py-1 rounded-full text-sm font-medium bg-primary/10 text-primary">
                 加载中...
             </p>
@@ -424,6 +424,9 @@
                 // 设置实时订阅
                 setupRealtimeSubscriptions();
                 
+                // 手动刷新UI状态
+                updateActivityDisplay();
+                
                 updateLoaderText("准备就绪...");
                 // 隐藏加载动画，显示应用
                 setTimeout(() => {
@@ -473,7 +476,7 @@
             });
         }
 
-        // 加载活动数据 - 修复了蛇形命名映射
+        // 加载活动数据
         async function loadActivityData() {
             try {
                 const { data, error } = await supabase
@@ -484,12 +487,12 @@
                     
                 if (error) {
                     if (error.code === 'PGRST116') {
-                        // 表中没有数据，插入默认活动（使用蛇形命名）
+                        // 表中没有数据，插入默认活动
                         const { error: insertError } = await supabase
                             .from('activity')
                             .insert([{
                                 id: 'default',
-                                title: "幸运抽奖活动",
+                                title: "小羊抽奖活动",
                                 start_time: new Date().toISOString(),
                                 end_time: new Date(Date.now() + 86400000).toISOString(),
                                 winner_count: 3,
@@ -502,7 +505,7 @@
                         throw error;
                     }
                 } else {
-                    // 正确映射蛇形命名字段到驼峰变量
+                    // 映射蛇形命名字段到驼峰变量
                     globalData.activity = {
                         ...data,
                         startTime: data.start_time,
@@ -837,6 +840,10 @@
                 if (error) {
                     throw new Error(error.message);
                 }
+                
+                // 立即更新本地状态并刷新UI
+                globalData.activity.status = status;
+                updateActivityDisplay();
             } catch (error) {
                 alert("更新活动状态失败: " + error.message);
             }
@@ -851,11 +858,11 @@
                 initApp();
             });
             
-            // 参与表单提交 - 添加防重复提交控制
+            // 参与表单提交
             document.getElementById("participate-form").addEventListener("submit", async (e) => {
                 e.preventDefault();
                 
-                // 检查是否正在提交中，如果是则直接返回
+                // 检查是否正在提交中
                 if (globalData.isSubmitting) {
                     return;
                 }
@@ -875,25 +882,24 @@
                 }
                 
                 try {
-                    // 1. 前端控制：设置提交状态为true，禁用按钮
+                    // 设置提交状态
                     globalData.isSubmitting = true;
                     submitBtn.disabled = true;
                     submitBtn.innerHTML = '<i class="fa fa-spinner fa-spin mr-2"></i>提交中...';
                     submitBtn.classList.add("opacity-70", "cursor-not-allowed");
                     
-                    // 2. 后端验证：再次检查IP是否已参与（防止前端数据未及时更新）
+                    // 检查IP是否已参与
                     const hasParticipated = await checkIpParticipated(globalData.userIp);
                     if (hasParticipated) {
                         alert("您已参与过本次活动");
                         return;
                     }
                     
-                    // 3. 添加参与者，将小黑盒ID存入name字段
+                    // 添加参与者
                     const { error } = await supabase
                         .from('participants')
                         .insert([{
-                            name: blackboxId,  // 存储小黑盒ID
-                            contact: '',       // 清空联系方式
+                            name: blackboxId,
                             ip: globalData.userIp,
                             time: new Date().toISOString()
                         }]);
@@ -907,7 +913,7 @@
                 } catch (error) {
                     alert("参与失败: " + error.message);
                 } finally {
-                    // 无论成功失败，恢复提交状态和按钮
+                    // 恢复提交状态
                     globalData.isSubmitting = false;
                     submitBtn.disabled = false;
                     submitBtn.innerHTML = '<i class="fa fa-gift mr-2"></i>确认参与';
@@ -957,7 +963,7 @@
                 document.getElementById("admin-panel").classList.add("hidden");
             });
             
-            // 活动设置表单提交 - 修复了蛇形命名
+            // 活动设置表单提交
             document.getElementById("activity-form").addEventListener("submit", async (e) => {
                 e.preventDefault();
                 
@@ -988,7 +994,7 @@
                 }
                 
                 try {
-                    // 准备更新数据（使用蛇形命名与数据库匹配）
+                    // 准备更新数据
                     const updates = {
                         title,
                         start_time: startTime,
@@ -1054,10 +1060,14 @@
                 alert("活动已结束");
             });
             
-            // 开始抽奖
+            // 开始抽奖 - 修复核心逻辑
             document.getElementById("draw-winners").addEventListener("click", async () => {
+                // 强制刷新活动状态
+                await loadActivityData();
+                
+                // 检查活动是否已结束
                 if (globalData.activity.status !== "ended") {
-                    alert("请先结束活动");
+                    alert("请先结束活动才能抽奖");
                     return;
                 }
                 
@@ -1108,8 +1118,7 @@
                     
                     // 添加排名并保存到数据库
                     const winnersWithRank = winners.map((winner, index) => ({
-                        name: winner.name,  // 存储小黑盒ID
-                        contact: '',       // 清空联系方式
+                        name: winner.name,
                         ip: winner.ip,
                         time: new Date().toISOString(),
                         rank: index + 1
@@ -1215,7 +1224,7 @@
 
         // 页面加载完成后初始化
         window.addEventListener("DOMContentLoaded", () => {
-            // 绑定事件（即使初始化失败也需要绑定重试按钮）
+            // 绑定事件
             bindEvents();
             // 初始化应用
             initApp();
