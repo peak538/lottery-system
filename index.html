@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>小羊抽奖系统</title>
+    <title>小羊抽奖系统（独家）</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -81,7 +81,7 @@
     <div id="app" class="container mx-auto px-4 py-8 max-w-3xl hidden">
         <!-- 头部 -->
         <header class="text-center mb-8">
-            <h1 class="text-[clamp(1.8rem,5vw,2.5rem)] font-bold text-gray-800 mb-2">小羊抽奖活动</h1>
+            <h1 class="text-[clamp(1.8rem,5vw,2.5rem)] font-bold text-gray-800 mb-2">小羊抽奖系统（独家）</h1>
             <p id="activity-status" class="inline-block px-4 py-1 rounded-full text-sm font-medium bg-primary/10 text-primary">
                 加载中...
             </p>
@@ -150,7 +150,7 @@
                     <i class="fa fa-check text-2xl text-secondary"></i>
                 </div>
                 <h3 class="text-lg font-medium text-gray-800 mb-2">您已成功参与抽奖</h3>
-                <p class="text-gray-500">请等待活动结束后公布结果</p>
+                <p class="text-gray-500">活动结束后将自动抽取幸运用户</p>
             </div>
 
             <!-- 活动未开始 -->
@@ -212,7 +212,7 @@
     <div id="admin-panel" class="fixed inset-0 bg-white z-50 hidden overflow-auto">
         <header class="bg-gray-800 text-white p-4 shadow-md">
             <div class="container mx-auto flex justify-between items-center">
-                <h2 class="text-xl font-bold">抽奖活动管理</h2>
+                <h2 class="text-xl font-bold">小羊抽奖系统（独家）管理</h2>
                 <button id="admin-logout" class="text-gray-300 hover:text-white transition-colors">
                     <i class="fa fa-sign-out mr-1"></i>退出
                 </button>
@@ -274,10 +274,6 @@
                             class="py-2.5 px-6 bg-danger text-white rounded-lg font-medium hover:bg-danger/90 transition-all active:btn-press">
                         <i class="fa fa-stop mr-1"></i>结束活动
                     </button>
-                    <button id="draw-winners" 
-                            class="py-2.5 px-6 bg-accent text-white rounded-lg font-medium hover:bg-accent/90 transition-all active:btn-press">
-                        <i class="fa fa-random mr-1"></i>开始抽奖
-                    </button>
                     <button id="copy-link" 
                             class="py-2.5 px-6 bg-gray-100 text-gray-800 rounded-lg font-medium hover:bg-gray-200 transition-all active:btn-press">
                         <i class="fa fa-link mr-1"></i>复制参与链接
@@ -287,6 +283,7 @@
                         <i class="fa fa-trash mr-1"></i>清空数据
                     </button>
                 </div>
+                <!-- 移除手动抽奖按钮 -->
             </div>
 
             <!-- 参与者列表 -->
@@ -369,7 +366,8 @@
             isAdmin: false,
             userIp: "",
             subscriptions: [], // 存储实时订阅
-            isSubmitting: false // 标记是否正在提交中
+            isSubmitting: false, // 标记是否正在提交中
+            isAutoDrawing: false // 标记是否正在自动抽奖中
         };
 
         // 显示错误信息
@@ -423,6 +421,9 @@
                 updateLoaderText("正在设置实时同步...");
                 // 设置实时订阅
                 setupRealtimeSubscriptions();
+                
+                // 检查是否需要自动抽奖（活动已结束但未抽奖）
+                checkAndAutoDraw();
                 
                 // 手动刷新UI状态
                 updateActivityDisplay();
@@ -598,6 +599,8 @@
                                     winnerCount: payload.new.winner_count
                                 };
                                 updateActivityDisplay();
+                                // 检查是否需要自动抽奖
+                                checkAndAutoDraw();
                             }
                         }
                     )
@@ -844,8 +847,74 @@
                 // 立即更新本地状态并刷新UI
                 globalData.activity.status = status;
                 updateActivityDisplay();
+                
+                // 如果活动状态变为结束，检查是否需要自动抽奖
+                if (status === "ended") {
+                    checkAndAutoDraw();
+                }
             } catch (error) {
                 alert("更新活动状态失败: " + error.message);
+            }
+        }
+
+        // 检查并执行自动抽奖
+        async function checkAndAutoDraw() {
+            // 条件：活动已结束 + 没有中奖名单 + 参与人数足够 + 不在抽奖中
+            if (globalData.activity.status === "ended" && 
+                globalData.winners.length === 0 && 
+                globalData.participants.length >= globalData.activity.winnerCount &&
+                !globalData.isAutoDrawing) {
+                
+                globalData.isAutoDrawing = true;
+                
+                try {
+                    // 显示自动抽奖中提示（仅管理员可见）
+                    const winnersList = document.getElementById("winners-list");
+                    winnersList.innerHTML = `
+                        <div class="col-span-full text-center py-12">
+                            <div class="w-16 h-16 border-4 border-gray-200 border-t-accent rounded-full animate-spin mx-auto mb-4"></div>
+                            <p class="text-gray-600">活动已结束，正在自动抽取幸运用户...</p>
+                        </div>
+                    `;
+                    
+                    // 随机抽取获奖者（不重复）
+                    const shuffled = [...globalData.participants].sort(() => 0.5 - Math.random());
+                    const winners = shuffled.slice(0, globalData.activity.winnerCount);
+                    
+                    // 添加排名并保存到数据库
+                    const winnersWithRank = winners.map((winner, index) => ({
+                        name: winner.name,
+                        ip: winner.ip,
+                        time: new Date().toISOString(),
+                        rank: index + 1
+                    }));
+                    
+                    // 模拟抽奖过程延迟
+                    await new Promise(resolve => setTimeout(resolve, 3000));
+                    
+                    const { error } = await supabase
+                        .from('winners')
+                        .insert(winnersWithRank);
+                        
+                    if (error) {
+                        throw new Error(error.message);
+                    }
+                    
+                    // 刷新中奖名单
+                    await loadWinners();
+                    
+                } catch (error) {
+                    console.error("自动抽奖失败:", error);
+                    const winnersList = document.getElementById("winners-list");
+                    winnersList.innerHTML = `
+                        <div class="col-span-full text-center text-red-500 py-8">
+                            <i class="fa fa-exclamation-circle text-2xl mb-2"></i>
+                            <p>自动抽奖失败，请稍后手动处理</p>
+                        </div>
+                    `;
+                } finally {
+                    globalData.isAutoDrawing = false;
+                }
             }
         }
 
@@ -1052,96 +1121,12 @@
                     return;
                 }
                 
-                if (!confirm("确定要结束活动吗？")) {
+                if (!confirm("确定要结束活动吗？结束后系统将自动抽奖")) {
                     return;
                 }
                 
                 await updateActivityStatus("ended");
-                alert("活动已结束");
-            });
-            
-            // 开始抽奖 - 修复核心逻辑
-            document.getElementById("draw-winners").addEventListener("click", async () => {
-                // 强制刷新活动状态
-                await loadActivityData();
-                
-                // 检查活动是否已结束
-                if (globalData.activity.status !== "ended") {
-                    alert("请先结束活动才能抽奖");
-                    return;
-                }
-                
-                if (globalData.participants.length < globalData.activity.winnerCount) {
-                    alert(`参与人数不足（需要${globalData.activity.winnerCount}人）`);
-                    return;
-                }
-                
-                if (globalData.winners.length > 0) {
-                    if (!confirm("已存在中奖名单，确定要重新抽奖吗？")) {
-                        return;
-                    }
-                    
-                    try {
-                        // 先清除现有中奖名单
-                        const { error: deleteError } = await supabase
-                            .from('winners')
-                            .delete()
-                            .neq('id', ''); // 删除所有记录
-                            
-                        if (deleteError) {
-                            throw new Error(deleteError.message);
-                        }
-                    } catch (error) {
-                        alert("清除现有中奖名单失败: " + error.message);
-                        return;
-                    }
-                }
-                
-                // 添加抽奖动画效果
-                const drawBtn = document.getElementById("draw-winners");
-                drawBtn.disabled = true;
-                drawBtn.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i>抽奖中...';
-                
-                // 显示抽奖动画
-                const winnersList = document.getElementById("winners-list");
-                winnersList.innerHTML = `
-                    <div class="col-span-full text-center py-12">
-                        <div class="w-16 h-16 border-4 border-gray-200 border-t-accent rounded-full animate-spin mx-auto mb-4"></div>
-                        <p class="text-gray-600">正在随机抽取幸运用户...</p>
-                    </div>
-                `;
-                
-                try {
-                    // 随机抽取获奖者（不重复）
-                    const shuffled = [...globalData.participants].sort(() => 0.5 - Math.random());
-                    const winners = shuffled.slice(0, globalData.activity.winnerCount);
-                    
-                    // 添加排名并保存到数据库
-                    const winnersWithRank = winners.map((winner, index) => ({
-                        name: winner.name,
-                        ip: winner.ip,
-                        time: new Date().toISOString(),
-                        rank: index + 1
-                    }));
-                    
-                    // 模拟抽奖过程延迟
-                    await new Promise(resolve => setTimeout(resolve, 3000));
-                    
-                    const { error } = await supabase
-                        .from('winners')
-                        .insert(winnersWithRank);
-                        
-                    if (error) {
-                        throw new Error(error.message);
-                    }
-                    
-                    alert("抽奖完成");
-                } catch (error) {
-                    alert("抽奖失败: " + error.message);
-                } finally {
-                    drawBtn.disabled = false;
-                    drawBtn.innerHTML = '<i class="fa fa-random mr-1"></i>开始抽奖';
-                }
+                alert("活动已结束，系统将自动进行抽奖");
             });
             
             // 复制参与链接
