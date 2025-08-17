@@ -1024,13 +1024,10 @@ function formatLocalTime(isoString) {
         actualStatus = "ended";
     }
             
-            // 更新活动信息
-            document.getElementById("activity-title").textContent = title;
-            document.getElementById("activity-time").textContent = `${formattedStart} - ${formattedEnd}`;
-            document.getElementById("activity-duration").textContent = durationText;
-            document.getElementById("activity-winners").textContent = `${winnerCount}人`;
-            document.getElementById("participant-count").textContent = globalData.participants.length;
-            document.getElementById("admin-participant-count").textContent = globalData.participants.length;
+            // 更新活动信息显示（使用实际状态）
+    document.getElementById("activity-title").textContent = title;
+    document.getElementById("activity-time").textContent = 
+        `${formattedStart} - ${formattedEnd}`;
             
             // 更新状态标签
     // 使用 actualStatus 替代原来的 status
@@ -1066,22 +1063,22 @@ function formatLocalTime(isoString) {
             const notStarted提示 = document.getElementById("not-started提示");
             const ended提示 = document.getElementById("ended提示");
             
-            formContainer.classList.add("hidden");
-            participated提示.classList.add("hidden");
-            notStarted提示.classList.add("hidden");
-            ended提示.classList.add("hidden");
+            // 隐藏所有提示
+    [formContainer, participated提示, notStarted提示, ended提示].forEach(el => 
+        el.classList.add("hidden"));
             
-            if (status === "active") {
-                if (hasParticipated) {
-                    participated提示.classList.remove("hidden");
-                } else {
-                    formContainer.classList.remove("hidden");
-                }
-            } else if (status === "pending") {
-                notStarted提示.classList.remove("hidden");
-            } else if (status === "ended") {
-                ended提示.classList.remove("hidden");
-            }
+            // 根据实际状态显示对应提示
+    if (actualStatus === "active") {
+        if (hasParticipated) {
+            participated提示.classList.remove("hidden");
+        } else {
+            formContainer.classList.remove("hidden");
+        }
+    } else if (actualStatus === "pending") {
+        notStarted提示.classList.remove("hidden");
+    } else if (actualStatus === "ended") {
+        ended提示.classList.remove("hidden");
+    }
             
             // 更新管理员表单中的时间和时长
             document.getElementById("activity-title-input").value = title;
@@ -1777,6 +1774,7 @@ function formatDateTimeForInput(date) {
 </body>
 </html>
     
+
 
 
 
