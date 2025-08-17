@@ -448,7 +448,31 @@ function formatLocalTime(isoString) {
                 return v.toString(16);
             });
         }
+        // 新增：标准化时间处理函数
+        function normalizeDateTime(input) {
+        // 处理datetime-local输入（无时区信息）
+        if (input.includes('T') && !input.endsWith('Z')) {
+        // 添加当前时区偏移
+        const date = new Date(input);
+        const offset = date.getTimezoneOffset() * 60000;
+        return new Date(date.getTime() - offset).toISOString();
+    }
+    return new Date(input).toISOString();
+}
 
+        // 新增：本地时间显示格式化
+        function formatLocalTime(isoString) {
+        const date = new Date(isoString);
+        // 转换为本地时间字符串（去掉秒和时区信息）
+        return date.toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+    }).replace(/\//g, '-');
+}
         // 显示错误信息
         function showError(message) {
             document.getElementById("loader").classList.add("hidden");
@@ -968,7 +992,7 @@ function formatLocalTime(isoString) {
         function updateActivityDisplay() {
             const { title, startTime, endTime, duration, winnerCount, status } = globalData.activity;
             
-            // 格式化时间
+            // 修改时间显示部分（关键修复）
             const start = new Date(globalData.activity.startTime);
             const end = new Date(globalData.activity.endTime);
             // 使用新的格式化函数
@@ -1504,88 +1528,85 @@ function formatLocalTime(isoString) {
             });
             
             // 活动设置表单提交
-            document.getElementById("activity-form").addEventListener("submit", async (e) => {
-                e.preventDefault();
-                
-                const title = document.getElementById("activity-title-input").value.trim();
-                const winnerCount = parseInt(document.getElementById("winner-count").value);
-                const startTime = document.getElementById("start-time").value;
-                const durationSelect = document.getElementById("duration-select");
-                const customDuration = document.getElementById("custom-duration").value;
-                const newPassword = document.getElementById("admin-password-set").value;
-                
-                // 计算实际时长
-                let duration = parseInt(durationSelect.value === "custom" ? customDuration : durationSelect.value);
-                if (isNaN(duration) || duration < 1) {
-                    alert("请输入有效的活动时长");
-                    return;
-                }
-                
-                if (!title) {
-                    alert("请输入活动名称");
-                    return;
-                }
-                
-                if (isNaN(winnerCount) || winnerCount < 1) {
-                    alert("请输入有效的中奖人数");
-                    return;
-                }
-                
-                if (!startTime) {
-                    alert("请选择活动开始时间");
-                    return;
-                }
+            // 活动设置表单提交
+document.getElementById("activity-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
     
-     try {
-                 
-                    // 计算结束时间（新增部分）
-                    const startDate = new Date(startTime);
-                    let duration = parseInt(durationSelect.value === "custom" ? customDuration : durationSelect.value);
-                    const endDate = new Date(startDate.getTime() + duration * 60000); // 分钟转毫秒
-                    // 准备更新数据
-                    const updates = {
-                        title,
-                        start_time: startTime,
-                        end_time: endDate.toISOString(),
-                        winner_count: winnerCount,
-                        duration: duration // 保存时长
-                    };
-                    
-                    // 如果输入了新密码，则更新
-                    if (newPassword) {
-                        updates.password = btoa(newPassword);
-                    }
-                    
-                    const { error } = await supabase
-                        .from('activity')
-                        .update(updates)
-                        .eq('id', globalData.activity.id);
-                        
-                    if (error) {
-                        throw new Error(error.message);
-                    }
-                    
-                    // 强制刷新活动数据以确保时间同步
-                    await loadActivityData();
-                    // 立即更新表单中的时间显示
-                    document.getElementById("start-time").value = formatDateTimeForInput(globalData.activity.startTime);
-                    updateActivityDisplay(); // 立即更新UI显示
-                    // 询问是否发布活动
-                    const shouldPublish = confirm(`活动设置已保存。是否立即发布活动？\n当前设置的开始时间为: ${startDate.toLocaleString()}`);
-                    
-                    if (shouldPublish) {
-                        // 更新状态为进行中
-                        await updateActivityStatus("active");
-                        alert("活动已发布");
-                    }
-                    
-                    if (newPassword) {
-                        document.getElementById("admin-password-set").value = "";
-                    }
-                } catch (error) {
-                    alert("保存失败: " + error.message);
-                }
-            });
+    try {
+        // 1. 获取表单值
+        const title = document.getElementById("activity-title-input").value.trim();
+        const winnerCount = parseInt(document.getElementById("winner-count").value);
+        const startTimeInput = document.getElementById("start-time").value;
+        const durationSelect = document.getElementById("duration-select");
+        const customDuration = document.getElementById("custom-duration").value;
+        
+        // 2. 验证输入
+        if (!title || isNaN(winnerCount) || !startTimeInput) {
+            throw new Error("请填写完整的活动设置");
+        }
+
+        // 3. 计算时间（关键修复）
+        let durationMinutes;
+        if (durationSelect.value === "custom") {
+            durationMinutes = parseInt(customDuration);
+            if (isNaN(durationMinutes)) throw new Error("请输入有效的自定义时长");
+        } else {
+            durationMinutes = parseInt(durationSelect.value);
+        }
+
+        // 标准化开始时间（处理时区）
+        const normalizedStartTime = normalizeDateTime(startTimeInput);
+        const startDate = new Date(normalizedStartTime);
+        
+        if (isNaN(startDate.getTime())) throw new Error("无效的开始时间");
+        
+        // 计算结束时间（添加时区处理）
+        const endDate = new Date(startDate.getTime() + durationMinutes * 60000);
+
+        // 4. 准备更新数据
+        const updates = {
+            title,
+            start_time: normalizedStartTime, // 使用标准化后的时间
+            end_time: endDate.toISOString(),
+            winner_count: winnerCount,
+            duration: durationMinutes
+        };
+
+        // 5. 添加密码更新逻辑
+        const newPassword = document.getElementById("admin-password-set").value;
+        if (newPassword) {
+            updates.password = btoa(newPassword);
+        }
+
+        // 6. 显示加载状态
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> 保存中...';
+
+        // 7. 发送更新请求
+        const { error } = await supabase
+            .from('activity')
+            .update(updates)
+            .eq('id', globalData.activity.id);
+
+        if (error) throw error;
+
+        // 8. 刷新数据
+        await loadActivityData();
+        updateActivityDisplay();
+        
+        alert("活动设置已保存");
+    } catch (error) {
+        console.error("保存失败:", error);
+        alert(`保存失败: ${error.message}`);
+    } finally {
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '保存活动设置';
+        }
+    }
+});
             
             // 结束活动
             document.getElementById("end-activity").addEventListener("click", async () => {
@@ -1653,7 +1674,7 @@ function formatLocalTime(isoString) {
             const d = new Date(date);
         // 处理时区偏移（关键修改）
         const offset = d.getTimezoneOffset() * 60000;
-        const localISOTime = new Date(d - offset).toISOString().slice(0, 16);
+        const localISOTime = new Date(d.getTime() - offset).toISOString().slice(0, 16);
         return localISOTime;
         }
 
@@ -1683,6 +1704,7 @@ function formatLocalTime(isoString) {
 </body>
 </html>
     
+
 
 
 
