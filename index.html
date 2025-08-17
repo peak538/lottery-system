@@ -699,6 +699,16 @@
                 }
                 
                 updateActivityDisplay();
+                // 确保结束时间正确（新增验证）
+        if (data.end_time) {
+            // 如果数据库中有正确的结束时间，直接使用
+            globalData.activity.endTime = data.end_time;
+        } else {
+            // 否则根据开始时间和时长计算
+            const start = new Date(data.start_time);
+            const end = new Date(start.getTime() + data.duration * 60000);
+            globalData.activity.endTime = end.toISOString();
+        }
             } catch (error) {
                 console.error("加载活动数据错误:", error);
                 throw new Error(`加载活动信息失败: ${error.message}`);
@@ -1192,7 +1202,7 @@
                 
                 // 如果活动状态变为结束，检查是否需要自动抽奖
                 if (status === "ended") {
-                    checkAndAutoDraw();
+                    await checkAndAutoDraw();
                 }
             } catch (error) {
                 alert("更新活动状态失败: " + error.message);
@@ -1509,6 +1519,10 @@
                 endDate.setMinutes(startDate.getMinutes() + duration);
                 
                 try {
+                    // 计算结束时间（新增部分）
+                    const startDate = new Date(startTime);
+                    let duration = parseInt(durationSelect.value === "custom" ? customDuration : durationSelect.value);
+                    const endDate = new Date(startDate.getTime() + duration * 60000); // 分钟转毫秒
                     // 准备更新数据
                     const updates = {
                         title,
@@ -1534,7 +1548,7 @@
                     
                     // 强制刷新活动数据以确保时间同步
                     await loadActivityData();
-                    
+                    updateActivityDisplay(); // 立即更新UI显示
                     // 询问是否发布活动
                     const shouldPublish = confirm(`活动设置已保存。是否立即发布活动？\n当前设置的开始时间为: ${startDate.toLocaleString()}`);
                     
@@ -1645,3 +1659,4 @@
 </body>
 </html>
     
+
