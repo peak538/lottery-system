@@ -1538,13 +1538,13 @@ function formatLocalTime(isoString) {
                 // 1. 标准化开始时间（关键修改）
                     const normalizedStartTime = normalizeDateTime(startTimeInput);
                     const startDate = new Date(normalizedStartTime);
-                // 计算结束时间（新增部分）
+                
+                
+                try {
+                    // 计算结束时间（新增部分）
                     const startDate = new Date(startTime);
                     let duration = parseInt(durationSelect.value === "custom" ? customDuration : durationSelect.value);
                     const endDate = new Date(startDate.getTime() + duration * 60000); // 分钟转毫秒
-                
-                try {
-                    
                     // 准备更新数据
                     const updates = {
                         title,
@@ -1686,5 +1686,6 @@ function formatLocalTime(isoString) {
 </body>
 </html>
     
+
 
 
