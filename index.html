@@ -764,6 +764,9 @@ function formatLocalTime(isoString) {
             const end = new Date(start.getTime() + data.duration * 60000);
             globalData.activity.endTime = end.toISOString();
         }
+                // 确保duration有默认值
+        globalData.activity.duration = data.duration || 
+            Math.round((new Date(data.end_time).getTime() - new Date(data.start_time).getTime()) / (1000 * 60);
             } catch (error) {
                 console.error("加载活动数据错误:", error);
                 throw new Error(`加载活动信息失败: ${error.message}`);
@@ -1011,14 +1014,19 @@ function formatLocalTime(isoString) {
     const start = new Date(startTime);
     const end = new Date(endTime);
     
-    // 修正状态判断逻辑
-    let actualStatus = status;
-    if (now < start) {
-        actualStatus = "pending"; // 当前时间在开始时间之前
-    } else if (now >= start && now <= end) {
-        actualStatus = "active"; // 当前时间在活动期内
-    } else if (now > end) {
-        actualStatus = "ended"; // 当前时间在结束时间之后
+    // 计算活动时长文本（修复未定义错误）
+    let durationText = '';
+    if (duration < 60) {
+        durationText = `${duration}分钟`;
+    } else if (duration < 1440) {
+        const hours = Math.floor(duration / 60);
+        const minutes = duration % 60;
+        durationText = `${hours}小时${minutes > 0 ? `${minutes}分钟` : ''}`;
+    } else {
+        const days = Math.floor(duration / 1440);
+        const remainingMinutes = duration % 1440;
+        const hours = Math.floor(remainingMinutes / 60);
+        durationText = `${days}天${hours > 0 ? `${hours}小时` : ''}`;
     }
             
             // 更新活动信息
@@ -1773,6 +1781,7 @@ function formatDateTimeForInput(date) {
 </body>
 </html>
     
+
 
 
 
