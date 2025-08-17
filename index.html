@@ -238,7 +238,7 @@
     <div id="admin-panel" class="fixed inset-0 bg-white z-50 hidden overflow-auto">
         <header class="bg-gray-800 text-white p-4 shadow-md">
             <div class="container mx-auto flex justify-between items-center">
-                <h2 class="text-xl font-bold">小羊抽奖系统（独家）管理</h2>
+                <h2 class="text-xl font-bold">小羊抽奖系统（独家）管理员面板</h2>
                 <button id="admin-logout" class="text-gray-300 hover:text-white transition-colors">
                     <i class="fa fa-sign-out mr-1"></i>退出
                 </button>
@@ -334,7 +334,7 @@
                     </button>
                     <button id="copy-link" 
                             class="py-2.5 px-6 bg-gray-100 text-gray-800 rounded-lg font-medium hover:bg-gray-200 transition-all active:btn-press">
-                        <i class="fa fa-link mr-1"></i>复制参与链接
+                        <i class="fa fa-link mr-1"></i>复制参与链接（本网站）
                     </button>
                 </div>
             </div>
@@ -479,7 +479,7 @@ function formatLocalTime(isoString) {
         hour: '2-digit',
         minute: '2-digit',
         hour12: false
-    }).replace(/\//g, '-');
+    }).replace(/\//g, '-').replace(/\b(\d)\b/g, '0$1');
 }
         // 显示错误信息
         function showError(message) {
@@ -1241,39 +1241,53 @@ function formatLocalTime(isoString) {
 
         // 更新活动状态
         async function updateActivityStatus(status) {
-            try {
-                const { error } = await supabase
-                    .from('activity')
-                    .update({ 
-                status,
-                // 如果是激活状态且开始时间在未来，自动调整开始时间
-                start_time: status === "active" ? 
-                    new Date().toISOString() : 
-                    globalData.activity.startTime
-            })
-                    .eq('id', globalData.activity.id);
-                    
-                if (error) {
-                    throw new Error(error.message);
-                }
-                
-                // 立即更新本地状态并刷新UI
-        globalData.activity.status = status;
-        if (status === "active") {
-            globalData.activity.startTime = new Date().toISOString();
+    try {
+        const updates = { status };
+        
+        // 只有当活动从pending变为active时，才检查是否需要调整时间
+        if (status === "active" && globalData.activity.status === "pending") {
+            const now = new Date();
+            const scheduledStart = new Date(globalData.activity.startTime);
+            
+            // 如果计划的开始时间在未来，保持原时间；否则调整为现在
+            if (scheduledStart > now) {
+                updates.start_time = scheduledStart.toISOString();
+            } else {
+                updates.start_time = now.toISOString();
+                // 重新计算结束时间（基于新开始时间+原时长）
+                const endTime = new Date(now.getTime() + globalData.activity.duration * 60000);
+                updates.end_time = endTime.toISOString();
+            }
         }
+        
+        const { error } = await supabase
+            .from('activity')
+            .update(updates)
+            .eq('id', globalData.activity.id);
+            
+        if (error) throw error;
+        
+        // 更新本地数据
+        globalData.activity.status = status;
+        if (updates.start_time) globalData.activity.startTime = updates.start_time;
+        if (updates.end_time) globalData.activity.endTime = updates.end_time;
+        
         updateActivityDisplay();
-                
-                // 如果活动状态变为结束，检查是否需要自动抽奖
+        
+        if (status === "ended") {
+            await checkAndAutoDraw();
+        }
+        
+        return true;
+    } catch (error) {
+        console.error("更新状态失败:", error);
+        throw error;
+    }
+            // 如果活动状态变为结束，检查是否需要自动抽奖
                 if (status === "ended") {
                     await checkAndAutoDraw();
                 }
-                return true;
-            } catch (error) {
-               console.error("更新状态失败:", error);
-        throw error; // 抛出错误让调用方处理
-            }
-        }
+}
 
         // 检查并执行自动抽奖
         async function checkAndAutoDraw() {
@@ -1575,13 +1589,16 @@ document.getElementById("activity-form").addEventListener("submit", async (e) =>
 
         // 标准化开始时间（处理时区）
         const normalizedStartTime = normalizeDateTime(startTimeInput);
-        const startDate = new Date(normalizedStartTime);
-        
-        if (isNaN(startDate.getTime())) throw new Error("无效的开始时间");
-        
-        // 计算结束时间（添加时区处理）
-        const endDate = new Date(startDate.getTime() + durationMinutes * 60000);
+        // 在activity-form的submit事件中，修改时间处理部分：
+const startDate = new Date(startTimeInput);
+if (isNaN(startDate.getTime())) throw new Error("无效的开始时间");
 
+// 转换为ISO格式（保留本地时间值）
+const timeString = `${startTimeInput}:00`;
+const normalizedStartTime = new Date(timeString).toISOString();
+
+// 计算结束时间（精确分钟数）
+const endDate = new Date(new Date(timeString).getTime() + durationMinutes * 60000);
         // 4. 准备更新数据
         const updates = {
             title,
@@ -1716,14 +1733,21 @@ document.getElementById("activity-form").addEventListener("submit", async (e) =>
             }
         }
 
-        // 格式化日期为input所需格式
-        function formatDateTimeForInput(date) {
-            const d = new Date(date);
-        // 处理时区偏移（关键修改）
-        const offset = d.getTimezoneOffset() * 60000;
-        const localISOTime = new Date(d.getTime() - offset).toISOString().slice(0, 16);
-        return localISOTime;
-        }
+        // 强化formatDateTimeForInput函数
+function formatDateTimeForInput(date) {
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return '';
+    
+    // 处理时区偏移（兼容所有浏览器）
+    const pad = num => num.toString().padStart(2, '0');
+    const year = d.getFullYear();
+    const month = pad(d.getMonth() + 1);
+    const day = pad(d.getDate());
+    const hours = pad(d.getHours());
+    const minutes = pad(d.getMinutes());
+    
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
 
         // 页面加载完成后初始化
         window.addEventListener("DOMContentLoaded", () => {
@@ -1751,6 +1775,7 @@ document.getElementById("activity-form").addEventListener("submit", async (e) =>
 </body>
 </html>
     
+
 
 
 
