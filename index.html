@@ -430,7 +430,9 @@
 function normalizeDateTime(input) {
     // 处理datetime-local输入（无时区信息）
     if (input.includes('T') && !input.endsWith('Z')) {
-        return new Date(input + 'Z').toISOString();
+        const date = new Date(input);
+        const offset = date.getTimezoneOffset() * 60000;
+        return new Date(date.getTime() - offset).toISOString();
     }
     return new Date(input).toISOString();
 }
@@ -1586,9 +1588,6 @@ document.getElementById("activity-form").addEventListener("submit", async (e) =>
         } else {
             durationMinutes = parseInt(durationSelect.value);
         }
-
-        // 标准化开始时间（处理时区）
-        const normalizedStartTime = normalizeDateTime(startTimeInput);
         // 在activity-form的submit事件中，修改时间处理部分：
 const startDate = new Date(startTimeInput);
 if (isNaN(startDate.getTime())) throw new Error("无效的开始时间");
@@ -1775,6 +1774,7 @@ function formatDateTimeForInput(date) {
 </body>
 </html>
     
+
 
 
 
