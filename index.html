@@ -1298,7 +1298,18 @@ function formatLocalTime(isoString) {
                     await checkAndAutoDraw();
                 }
 }
-
+// 新增函数：显示抽奖结果
+        function showDrawResult() {
+            if (globalData.winners.length > 0) {
+                // 显示中奖名单模态框
+                document.getElementById("winners-modal").classList.remove("hidden");
+                document.getElementById("winners-modal").classList.add("flex");
+            } else if (globalData.participants.length === 0) {
+                alert("活动已结束，但没有参与者");
+            } else {
+                alert("活动已结束，但未抽取出中奖者");
+            }
+        }
         // 检查并执行自动抽奖
         async function checkAndAutoDraw() {
             // 条件：活动已结束 + 没有中奖名单 + 参与人数足够 + 不在抽奖中
@@ -1334,7 +1345,7 @@ function formatLocalTime(isoString) {
                     }));
                     
                     // 模拟抽奖过程延迟
-                    await new Promise(resolve => setTimeout(resolve, 3000));
+                    await new Promise(resolve => setTimeout(resolve, 2000));
                     
                     const { error } = await supabase
                         .from('winners')
@@ -1346,7 +1357,8 @@ function formatLocalTime(isoString) {
                     
                     // 刷新中奖名单
                     await loadWinners();
-                    
+                    // 抽奖完成后显示结果
+                    showDrawResult();
                 } catch (error) {
                     console.error("自动抽奖失败:", error);
                     const winnersList = document.getElementById("winners-list");
@@ -1679,20 +1691,54 @@ const endDate = new Date(new Date(timeString).getTime() + durationMinutes * 6000
     }
 });
             
-            // 结束活动
-            document.getElementById("end-activity").addEventListener("click", async () => {
-                if (globalData.activity.status !== "active") {
-                    alert("活动未在进行中");
-                    return;
-                }
-                
-                if (!confirm("确定要结束活动吗？结束后系统将自动抽奖")) {
-                    return;
-                }
-                
-                await updateActivityStatus("ended");
-                alert("活动已结束，系统将自动进行抽奖");
-            });
+        // 修改结束按钮事件处理
+document.getElementById("end-activity").addEventListener("click", async () => {
+    const now = new Date();
+    const endTime = new Date(globalData.activity.endTime);
+    
+    // 双重验证：数据库状态和本地时间
+    if (globalData.activity.status !== "active" && now < endTime) {
+        alert("活动未在进行中或未到结束时间");
+        return;
+    }
+    
+    if (!confirm("确定要强制结束活动吗？")) {
+        return;
+    }
+    
+    try {
+        // 显示加载状态
+        const btn = document.getElementById("end-activity");
+        btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> 结束中...';
+        btn.disabled = true;
+        
+        // 强制更新结束时间为当前时间
+        const { error } = await supabase
+            .from('activity')
+            .update({ 
+                status: "ended",
+                end_time: new Date().toISOString() // 强制设置为当前时间
+            })
+            .eq('id', globalData.activity.id);
+            
+        if (error) throw error;
+        
+        // 刷新数据
+        await loadActivityData();
+        await checkAndAutoDraw(); // 触发自动抽奖
+        
+        // 显示抽奖结果
+        showDrawResult();
+        
+    } catch (error) {
+        console.error("结束活动失败:", error);
+        alert(`结束失败: ${error.message}`);
+    } finally {
+        const btn = document.getElementById("end-activity");
+        btn.innerHTML = '<i class="fa fa-stop mr-1"></i>结束活动';
+        btn.disabled = false;
+    }
+});
             
             // 新建活动按钮
             document.getElementById("new-activity").addEventListener("click", createNewActivity);
@@ -1782,6 +1828,7 @@ function formatDateTimeForInput(date) {
 </body>
 </html>
     
+
 
 
 
