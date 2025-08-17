@@ -1015,18 +1015,13 @@ function formatLocalTime(isoString) {
     const end = new Date(endTime);
     
     // 计算活动时长文本（修复未定义错误）
-    let durationText = '';
-    if (duration < 60) {
-        durationText = `${duration}分钟`;
-    } else if (duration < 1440) {
-        const hours = Math.floor(duration / 60);
-        const minutes = duration % 60;
-        durationText = `${hours}小时${minutes > 0 ? `${minutes}分钟` : ''}`;
-    } else {
-        const days = Math.floor(duration / 1440);
-        const remainingMinutes = duration % 1440;
-        const hours = Math.floor(remainingMinutes / 60);
-        durationText = `${days}天${hours > 0 ? `${hours}小时` : ''}`;
+    let actualStatus = status;
+    if (now < start) {
+        actualStatus = "pending";
+    } else if (now >= start && now <= end) {
+        actualStatus = "active";
+    } else if (now > end) {
+        actualStatus = "ended";
     }
             
             // 更新活动信息
@@ -1038,6 +1033,7 @@ function formatLocalTime(isoString) {
             document.getElementById("admin-participant-count").textContent = globalData.participants.length;
             
             // 更新状态标签
+    // 使用 actualStatus 替代原来的 status
     const statusEl = document.getElementById("activity-status");
     switch(actualStatus) {
         case "pending":
@@ -1781,6 +1777,7 @@ function formatDateTimeForInput(date) {
 </body>
 </html>
     
+
 
 
 
