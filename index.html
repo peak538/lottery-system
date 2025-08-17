@@ -471,7 +471,7 @@ function formatLocalTime(isoString) {
 }
 
         // 新增：本地时间显示格式化
-        function formatLocalTime(isoString) {
+    function formatLocalTime(isoString) {
         const date = new Date(isoString);
         // 转换为本地时间字符串（去掉秒和时区信息）
         return date.toLocaleString('zh-CN', {
@@ -482,6 +482,8 @@ function formatLocalTime(isoString) {
         minute: '2-digit',
         hour12: false
     }).replace(/\//g, '-').replace(/\b(\d)\b/g, '0$1');
+        const pad = num => num.toString().padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
         // 显示错误信息
         function showError(message) {
@@ -1002,7 +1004,7 @@ function formatLocalTime(isoString) {
         }
 
         // 更新活动显示
-        function updateActivityDisplay() {
+    function updateActivityDisplay() {
         const { title, startTime, endTime, duration, winnerCount, status } = globalData.activity;
     
     // 使用新的格式化函数
@@ -1028,7 +1030,12 @@ function formatLocalTime(isoString) {
     document.getElementById("activity-title").textContent = title;
     document.getElementById("activity-time").textContent = 
         `${formattedStart} - ${formattedEnd}`;
-            
+    document.getElementById("activity-duration").textContent = 
+    `${globalData.activity.duration}分钟`;
+    document.getElementById("activity-winners").textContent = 
+    globalData.activity.winnerCount;
+    document.getElementById("participant-count").textContent = 
+    globalData.participants.length;
             // 更新状态标签
     // 使用 actualStatus 替代原来的 status
     const statusEl = document.getElementById("activity-status");
@@ -1138,7 +1145,8 @@ function formatLocalTime(isoString) {
                 `;
                 return;
             }
-            
+            document.getElementById("participant-count").textContent = 
+    globalData.participants.length;
             listEl.innerHTML = globalData.participants.map((p, index) => `
                 <tr class="hover:bg-gray-50">
                     <td class="px-4 py-3">${index + 1}</td>
@@ -1774,6 +1782,7 @@ function formatDateTimeForInput(date) {
 </body>
 </html>
     
+
 
 
 
