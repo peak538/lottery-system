@@ -418,7 +418,28 @@
             isSubmitting: false, // 标记是否正在提交中
             isAutoDrawing: false // 标记是否正在自动抽奖中
         };
+        // 新增：标准化时间处理函数
+function normalizeDateTime(input) {
+    // 处理datetime-local输入（无时区信息）
+    if (input.includes('T') && !input.endsWith('Z')) {
+        return new Date(input + 'Z').toISOString();
+    }
+    return new Date(input).toISOString();
+}
 
+// 新增：本地时间显示格式化
+function formatLocalTime(isoString) {
+    const date = new Date(isoString);
+    // 转换为本地时间字符串（去掉秒和时区信息）
+    return date.toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+    }).replace(/\//g, '-');
+}
         // 生成UUID函数
         function generateUUID() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -948,11 +969,13 @@
             const { title, startTime, endTime, duration, winnerCount, status } = globalData.activity;
             
             // 格式化时间
-            const start = new Date(startTime);
-            const end = new Date(endTime);
-            const formattedStart = start.toLocaleString();
-            const formattedEnd = end.toLocaleString();
-            
+            const start = new Date(globalData.activity.startTime);
+            const end = new Date(globalData.activity.endTime);
+            // 使用新的格式化函数
+            const formattedStart = formatLocalTime(start);
+            const formattedEnd = formatLocalTime(end);
+            document.getElementById("activity-time").textContent = 
+        `${formattedStart} - ${formattedEnd}`;
             // 格式化时长显示
             let durationText = '';
             if (duration < 60) {
@@ -1512,17 +1535,16 @@
                     alert("请选择活动开始时间");
                     return;
                 }
-                
-                // 计算结束时间
-                const startDate = new Date(startTime);
-                const endDate = new Date(startDate);
-                endDate.setMinutes(startDate.getMinutes() + duration);
-                
-                try {
-                    // 计算结束时间（新增部分）
+                // 1. 标准化开始时间（关键修改）
+                    const normalizedStartTime = normalizeDateTime(startTimeInput);
+                    const startDate = new Date(normalizedStartTime);
+                // 计算结束时间（新增部分）
                     const startDate = new Date(startTime);
                     let duration = parseInt(durationSelect.value === "custom" ? customDuration : durationSelect.value);
                     const endDate = new Date(startDate.getTime() + duration * 60000); // 分钟转毫秒
+                
+                try {
+                    
                     // 准备更新数据
                     const updates = {
                         title,
@@ -1548,6 +1570,8 @@
                     
                     // 强制刷新活动数据以确保时间同步
                     await loadActivityData();
+                    // 立即更新表单中的时间显示
+                    document.getElementById("start-time").value = formatDateTimeForInput(globalData.activity.startTime);
                     updateActivityDisplay(); // 立即更新UI显示
                     // 询问是否发布活动
                     const shouldPublish = confirm(`活动设置已保存。是否立即发布活动？\n当前设置的开始时间为: ${startDate.toLocaleString()}`);
@@ -1629,8 +1653,11 @@
 
         // 格式化日期为input所需格式
         function formatDateTimeForInput(date) {
-            // 确保时间格式正确
-            return new Date(date).toISOString().slice(0, 16);
+            const d = new Date(date);
+        // 处理时区偏移（关键修改）
+        const offset = d.getTimezoneOffset() * 60000;
+        const localISOTime = new Date(d - offset).toISOString().slice(0, 16);
+        return localISOTime;
         }
 
         // 页面加载完成后初始化
@@ -1659,4 +1686,5 @@
 </body>
 </html>
     
+
 
